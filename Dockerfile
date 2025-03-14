@@ -70,4 +70,4 @@ RUN chown -R ${USER} ${HOME}
 
 USER ${USER}
 
-CMD ["uvicorn", "safe_6g_kafkabroker.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "safe_6g_kafkabroker.main:app", "--host", "0.0.0.0", "--port", "6969"]

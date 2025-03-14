@@ -1,0 +1,1 @@
+::: safe_6g_kafkabroker.services.kafka_consume_service

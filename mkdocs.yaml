@@ -7,6 +7,10 @@ copyright: |
   Copyright &copy; 2025-2025 FRONT Research Group </a>
 nav:
   - Overview: index.md
+  - Code Reference:
+    - Services:
+      - Consume: src/code_ref/services/consume_service.md
+      - Producer: src/code_ref/services/producer_service.md
 theme:
   name: material
   features:
