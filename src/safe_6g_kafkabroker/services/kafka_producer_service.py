@@ -1,48 +1,39 @@
 import os
 import json
 
-from kafka import KafkaProducer
-from safe_6g_kafkabroker.models.kafka_message import KafkaMessage
+from aiokafka import AIOKafkaProducer
 
-KAFKA_SERVER = os.getenv("KAFKA_SERVER", "kafka:9092")
+from safe_6g_kafkabroker.utils.logging import setup_logger
+
+logger = setup_logger()
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 
 class KafkaProducerService:
-    """
-    KafkaProducerService is responsible for publishing messages to Kafka topics.
-    
-    This service serializes messages into JSON format and sends them to a Kafka topic 
-    determined by the message's function type. It ensures that messages are flushed to the broker,
-    supporting a reliable, asynchronous messaging system that other components (or teams) can use 
-    to communicate within the SAFE-6G framework.
-    
-    Attributes:
-        producer (KafkaProducer): The underlying Kafka producer instance configured with the
-                                  target Kafka server and a JSON serializer.
-    """
     def __init__(self):
-        """
-        Initialize the KafkaProducerService.
+        self.producer = None
 
-        Notes:
-            - Ensure that the topics are configured with adequate partitioning on your Kafka cluster.
-            - The producer uses a JSON serializer for outgoing messages.
-        """
-        self.producer = KafkaProducer(
-            bootstrap_servers=KAFKA_SERVER,
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    async def start(self):
+        """Start the Kafka producer."""
+        self.producer = AIOKafkaProducer(
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
+        await self.producer.start()
+        logger.info("Kafka Producer started.")
 
-    def send_message(self, message: KafkaMessage):
-        """
-        Publish a message to a Kafka topic.
+    async def send_message(self, topic: str, message: dict):
+        """Send message to Kafka topic."""
+        if not self.producer:
+            await self.start()
+        await self.producer.send(topic, message)
+        logger.info(f"Message sent to topic `{topic}`: {message}")
 
-        Args:
-            message (KafkaMessage): The message to publish.
+    async def stop(self):
+        """Stop Kafka producer."""
+        if self.producer:
+            await self.producer.stop()
+            logger.info("Kafka Producer stopped.")
 
-        Returns:
-            Status (dict): A dictionary with a status message regarding the publishing result.
-        """
-        topic = message.function.value  # Use function type as topic
-        self.producer.send(topic, message.model_dump())
-        self.producer.flush()
-        return {"status": "Message published to topic: " + topic}
+# Initialize a global instance
+kafka_producer = KafkaProducerService()

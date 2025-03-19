@@ -30,6 +30,8 @@ services:
     restart: always
     ports:
       - "6969:6969"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
     depends_on:
       kafka:
         condition: service_healthy
