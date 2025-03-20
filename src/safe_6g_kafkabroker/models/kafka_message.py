@@ -11,7 +11,6 @@ class FunctionType(str, Enum):
 
 class KafkaMessage(BaseModel):
     cLoTW: float = Field(..., description="Confidence Level of Trustworthiness")
-    function: FunctionType = Field(..., description="Function topic category")
     targetApplicationIP: str = Field(..., description="Target application IP address")
     IMSI: str = Field(..., description="International Mobile Subscriber Identity")
     MSISDN: str = Field(..., description="Mobile Station International Subscriber Directory Number")

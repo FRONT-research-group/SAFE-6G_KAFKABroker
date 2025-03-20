@@ -1,69 +1,43 @@
 import os
 import json
+import asyncio
 
-from kafka import KafkaConsumer
-from safe_6g_kafkabroker.models.kafka_message import FunctionType
+from aiokafka import AIOKafkaConsumer
 
-KAFKA_SERVER = os.getenv("KAFKA_SERVER", "kafka:9092")
+from safe_6g_kafkabroker.utils.logging import setup_logger
+
+logger = setup_logger()
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 
 class KafkaConsumerService:
-    """
-    KafkaConsumerService handles consuming messages from a specific Kafka topic based on function type.
-    
-    This service subscribes to a Kafka topic corresponding to the provided function type (e.g., SAFETY, SECURITY).
-    It deserializes JSON messages and retrieves a batch of messages up to a specified limit. The consumer is configured 
-    to manage offsets manually, ensuring precise control over message processing within a pull-based API model.
-    
-    Attributes:
-        topic (str): The Kafka topic to subscribe to, derived from the function type.
-        consumer (KafkaConsumer): The underlying Kafka consumer instance.
-    """
-    def __init__(self, function_type: FunctionType):
-        """
-        Initialize a Kafka consumer to subscribe to a given function topic.
+    def __init__(self):
+        self.consumer = None
 
-        Args:
-            function_type (FunctionType): The type of function to subscribe to.
-
-        Notes:
-            - Topics should be pre-configured on your Kafka cluster with appropriate partitioning.
-            - auto_offset_reset is set to 'earliest' to start from the beginning if no offset is committed.
-            - enable_auto_commit is disabled to allow for manual offset management.
-        """
-        self.topic = function_type.value  # Subscribe to function topic
-        group_id = f"{function_type.value.lower()}-consumer-group"
-        self.consumer = KafkaConsumer(
-            self.topic,
-            bootstrap_servers=KAFKA_SERVER,
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            auto_offset_reset="earliest",
-            enable_auto_commit=False,  # Disable auto commit for manual offset control
-            group_id=group_id,
-            consumer_timeout_ms=5000  
+    async def start_consumer(self, topic: str, max_messages: int = 10, timeout: int = 5):
+        """Consume the latest messages from a Kafka topic with timeout handling."""
+        self.consumer = AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            auto_offset_reset="earliest",  # 'earliest' ensures it gets old messages if available
+            enable_auto_commit=True,
+            group_id="fastapi-consumer-group"  # Consumers with the same group share messages
         )
 
-    def consume_messages(self, limit: int = 10):
-        """
-        Consume messages from the Kafka topic and manually commit offsets after processing.
+        await self.consumer.start()
+        logger.info(f"Subscribed to `{topic}`, waiting for messages...")
 
-        Args:
-            limit (int): The maximum number of messages to consume.
-
-        Returns:
-            messages(list): A list of consumed messages.
-
-        Notes:
-            - Offsets are manually committed after processing the batch to ensure reliability.
-            - The consumer is closed gracefully once processing is complete.
-        """
         messages = []
         try:
-            for message in self.consumer:
-                messages.append(message.value)
-                if len(messages) >= limit:
-                    break
-            # Manually commit offsets after processing the batch
-            self.consumer.commit()
-        finally:
-            self.consumer.close()
+            while len(messages) < max_messages:
+                msg = await asyncio.wait_for(self.consumer.getone(), timeout)  # ⏳ Timeout Handling
+                messages.append(json.loads(msg.value))
+                logger.info(f"Received message from `{topic}`: {messages[-1]}")
+        except asyncio.TimeoutError:
+            logger.warning(f"No new messages in `{topic}` within {timeout} seconds. Returning what we have.")
+
+        await self.consumer.stop()
         return messages
+
+# Global instance
+kafka_consumer = KafkaConsumerService()
